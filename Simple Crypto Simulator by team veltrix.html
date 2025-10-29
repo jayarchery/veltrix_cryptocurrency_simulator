@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<!-- saved from url=(0085)file:///C:/Users/JAYSUDHARSAN/OneDrive/Documents/simple_cryptocurrency_simulator.html -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Simple Crypto Simulator by team veltrix  </title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Arial;background:#f6f8fb;color:#111;margin:0;padding:20px}
+    .card{background:#fff;border-radius:12px;box-shadow:0 6px 18px rgba(15,23,42,0.06);padding:16px;margin-bottom:16px}
+    header{display:flex;align-items:center;justify-content:space-between}
+    h1{font-size:18px;margin:0}
+    .row{display:flex;gap:16px;flex-wrap:wrap}
+    .col{flex:1;min-width:260px}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:8px;text-align:left;border-bottom:1px solid #eee}
+    button{padding:8px 12px;border-radius:8px;border:0;background:#0b76ff;color:#fff;cursor:pointer}
+    input[type=number]{width:100%;padding:8px;border-radius:8px;border:1px solid #ddd}
+    .small{font-size:13px;color:#666}
+    .green{color:green}
+    .red{color:red}
+    footer{margin-top:12px;font-size:13px;color:#666}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <header>
+      <h1>Simple Crypto Simulator by veltrix</h1>
+      <div class="small">Virtual balance: <strong id="balance">₹7,986.94</strong></div>
+    </header>
+    <p class="small">This is a lightweight, single-file simulator that uses simulated prices (random walk). You can buy/sell BTC and ETH with virtual rupees. Data is saved in localStorage.</p>
+  </div>
+
+  <div class="row">
+    <div class="col card">
+      <h3>Market</h3>
+      <table>
+        <thead><tr><th>Coin</th><th>Price</th><th>Change</th><th>Action</th></tr></thead>
+        <tbody id="marketBody"><tr><td>BTC <div class="small">Bitcoin</div></td>
+                    <td>₹4,70,114.9</td>
+                    <td class="small ">-0.62%</td>
+                    <td><button onclick="quickBuy(&#39;BTC&#39;)">Buy 50% cash</button></td></tr><tr><td>ETH <div class="small">Ethereum</div></td>
+                    <td>₹21,676.1</td>
+                    <td class="small green">+0.47%</td>
+                    <td><button onclick="quickBuy(&#39;ETH&#39;)">Buy 50% cash</button></td></tr></tbody>
+      </table>
+      <div class="small">Prices update every 2 seconds.</div>
+    </div>
+
+    <div class="col card">
+      <h3>Trade</h3>
+      <label class="small">Select coin</label>
+      <select id="tradeCoin"><option value="BTC">BTC</option><option value="ETH">ETH</option></select>
+      <label class="small">Amount to spend (₹)</label>
+      <input type="number" id="tradeAmount" value="1000" min="1">
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button id="buyBtn">Buy</button>
+        <button id="sellBtn">Sell (by ₹)</button>
+      </div>
+      <div style="margin-top:8px" class="small">You can sell by specifying the rupee amount to convert from holdings to cash.</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Portfolio</h3>
+    <table>
+      <thead><tr><th>Coin</th><th>Qty</th><th>Avg Price</th><th>Value</th><th>P/L</th></tr></thead>
+      <tbody id="portfolioBody"><tr><td>ETH</td><td>0.056709</td><td>₹33,045.67</td><td>₹1,229.24</td><td class="small red">₹-644.76</td></tr></tbody>
+    </table>
+    <div style="display:flex;gap:12px;align-items:center;margin-top:10px">
+      <div class="small">Cash: <strong id="cash">₹7,986.94</strong></div>
+      <div class="small">Total value: <strong id="totalValue">₹9,216.17</strong></div>
+      <button id="resetBtn" style="margin-left:auto;background:#ff4d4f">Reset</button>
+    </div>
+  </div>
+
+  <footer class="small">this is created by Jaysudharsan , likith and team.</footer>
+
+<script>
+// --- Simple simulated market + trading logic ---
+const INITIAL_BALANCE = 10000; // ₹
+const coins = {
+  BTC: {name:'Bitcoin', price: 500000},
+  ETH: {name:'Ethereum', price: 35000}
+};
+
+// state stored in localStorage
+const STORAGE_KEY = 'simpleCryptoSim_v1';
+let state = {
+  cash: INITIAL_BALANCE,
+  portfolio: {
+    // BTC: {qty: 0.002, avg: 480000}
+  },
+  market: {}
+};
+
+function loadState(){
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if(raw){
+    try{ state = JSON.parse(raw); }catch(e){ console.warn('bad state'); }
+  } else {
+    // initialize market with starting prices
+    for(const k in coins) state.market[k] = {price: coins[k].price, prev: coins[k].price};
+  }
+}
+
+function saveState(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function formatRupee(x){
+  return '₹' + Number(x).toLocaleString('en-IN', {maximumFractionDigits:2});
+}
+
+function renderHeader(){
+  document.getElementById('balance').textContent = formatRupee(state.cash);
+  document.getElementById('cash').textContent = formatRupee(state.cash);
+}
+
+function renderMarket(){
+  const tbody = document.getElementById('marketBody');
+  tbody.innerHTML = '';
+  const select = document.getElementById('tradeCoin');
+  select.innerHTML = '';
+  for(const sym of Object.keys(state.market)){
+    const m = state.market[sym];
+    const tr = document.createElement('tr');
+    const change = ((m.price - (m.prev||m.price))/m.prev*100) || 0;
+    tr.innerHTML = `<td>${sym} <div class="small">${coins[sym].name}</div></td>
+                    <td>${formatRupee(m.price)}</td>
+                    <td class="small ${change>=0? 'green':''}">${change>=0?'+':''}${change.toFixed(2)}%</td>
+                    <td><button onclick="quickBuy('${sym}')">Buy 50% cash</button></td>`;
+    tbody.appendChild(tr);
+
+    const opt = document.createElement('option'); opt.value = sym; opt.textContent = sym; select.appendChild(opt);
+  }
+}
+
+function renderPortfolio(){
+  const tbody = document.getElementById('portfolioBody');
+  tbody.innerHTML = '';
+  let total = state.cash;
+  for(const sym of Object.keys(state.market)){
+    const m = state.market[sym];
+    const p = state.portfolio[sym];
+    if(p && p.qty>0){
+      const value = p.qty * m.price;
+      const pl = value - (p.qty * p.avg);
+      total += value;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${sym}</td><td>${p.qty.toFixed(6)}</td><td>${formatRupee(p.avg)}</td><td>${formatRupee(value)}</td><td class="small ${pl>=0? 'green':'red'}">${pl>=0?'+':''}${formatRupee(pl)}</td>`;
+      tbody.appendChild(tr);
+    }
+  }
+  document.getElementById('totalValue').textContent = formatRupee(total);
+}
+
+function quickBuy(sym){
+  const amt = state.cash*0.5; // spend 50%
+  document.getElementById('tradeCoin').value = sym;
+  document.getElementById('tradeAmount').value = Math.floor(amt);
+  buy();
+}
+
+function buy(){
+  const sym = document.getElementById('tradeCoin').value;
+  let amt = Number(document.getElementById('tradeAmount').value);
+  if(!sym || amt<=0){ alert('Choose coin and positive amount'); return; }
+  const price = state.market[sym].price;
+  if(amt>state.cash){ alert('Not enough cash'); return; }
+  const qty = amt / price;
+  // update portfolio avg price
+  if(!state.portfolio[sym]) state.portfolio[sym] = {qty:0, avg:0};
+  const p = state.portfolio[sym];
+  const newTotalQty = p.qty + qty;
+  const newAvg = (p.avg * p.qty + price * qty) / newTotalQty;
+  p.qty = newTotalQty; p.avg = newAvg;
+  state.cash -= amt;
+  saveState(); renderAll();
+}
+
+function sell(){
+  const sym = document.getElementById('tradeCoin').value;
+  let amt = Number(document.getElementById('tradeAmount').value);
+  if(!sym || amt<=0){ alert('Choose coin and positive amount'); return; }
+  const price = state.market[sym].price;
+  if(!state.portfolio[sym] || state.portfolio[sym].qty<=0){ alert('You have no holdings'); return; }
+  const maxSellValue = state.portfolio[sym].qty * price;
+  if(amt>maxSellValue) amt = maxSellValue; // cap to holdings
+  const qtyToSell = amt / price;
+  state.portfolio[sym].qty -= qtyToSell;
+  if(state.portfolio[sym].qty < 1e-9) delete state.portfolio[sym];
+  state.cash += amt;
+  saveState(); renderAll();
+}
+
+function simulatePriceStep(){
+  for(const sym of Object.keys(state.market)){
+    const m = state.market[sym];
+    m.prev = m.price;
+    // random walk with small volatility, scaled to coin
+    const vol = (sym==='BTC')?0.01:0.02; // 1% or 2%
+    const changePct = (Math.random()*2-1) * vol; // -vol..+vol
+    m.price = Math.max(1, m.price * (1 + changePct));
+  }
+  saveState(); renderAll();
+}
+
+function renderAll(){ renderHeader(); renderMarket(); renderPortfolio(); }
+
+// Hooks
+loadState(); renderAll();
+
+document.getElementById('buyBtn').addEventListener('click', buy);
+document.getElementById('sellBtn').addEventListener('click', sell);
+document.getElementById('resetBtn').addEventListener('click', ()=>{
+  if(confirm('Reset simulator and clear data?')){ localStorage.removeItem(STORAGE_KEY); state = {cash: INITIAL_BALANCE, portfolio:{}, market:{}}; for(const k in coins) state.market[k] = {price: coins[k].price, prev: coins[k].price}; saveState(); renderAll(); }
+});
+
+// start market updates every 2 seconds
+setInterval(simulatePriceStep, 2000);
+
+// ensure market exists if fresh
+if(Object.keys(state.market).length===0){ for(const k in coins) state.market[k] = {price: coins[k].price, prev: coins[k].price}; saveState(); }
+
+// initial small step so page shows changes
+simulatePriceStep();
+
+// expose for console debugging
+window._sim = {state, saveState, simulatePriceStep};
+</script>
+
+
+
+
+</body></html>
